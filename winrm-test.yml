@@ -1,0 +1,25 @@
+
+- name: Test WinRM connection to Windows 
+
+  hosts: all 
+
+  gather_facts: no 
+
+  tasks: 
+
+    - name: Ping Windows host using win_ping 
+
+      ansible.windows.win_ping: 
+
+    - name: Run ipconfig command 
+
+      ansible.windows.win_command: ipconfig 
+
+      register: ipconfig_out 
+
+    - name: Show ipconfig output 
+
+      ansible.builtin.debug: 
+
+        var: ipconfig_out.stdout_lines 
+
