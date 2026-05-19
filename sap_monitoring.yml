@@ -1,6 +1,6 @@
 ---
 - name: SAP Monitoring Automation – Remote Windows Host (GXO)
-  hosts: 10.19.1.67         # Replace with your inventory group or host name
+  hosts: all         # Replace with your inventory group or host name
   gather_facts: yes
   vars:
     scripts_dir: "C:\\GXO_SAP"
