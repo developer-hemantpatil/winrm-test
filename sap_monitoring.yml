@@ -10,15 +10,21 @@
 
   tasks:
     # -----------------------------------------------------------------
-    # 1. Kill any existing SAP Logon processes (to avoid session mismatch)
+    # 1. Kill any existing SAP Logon processes (ignore if none found)
     # -----------------------------------------------------------------
-    - name: Stop existing SAP Logon processes
+    - name: Stop existing SAP Logon processes (if any)
       ansible.windows.win_shell: |
-        Get-Process -Name "saplogon" -ErrorAction SilentlyContinue | Stop-Process -Force
+        $processes = Get-Process -Name "saplogon" -ErrorAction SilentlyContinue
+        if ($processes) {
+          $processes | Stop-Process -Force
+          Write-Host "Killed existing SAP Logon processes."
+        } else {
+          Write-Host "No existing SAP Logon processes found."
+        }
       register: kill_result
-      changed_when: kill_result.stdout != ""
+      changed_when: "'Killed existing' in kill_result.stdout"
 
-    - name: Wait a moment after killing
+    - name: Wait a moment after killing (if any were killed)
       ansible.builtin.pause:
         seconds: 3
       when: kill_result is changed
