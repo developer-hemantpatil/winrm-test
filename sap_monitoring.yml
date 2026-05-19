@@ -30,11 +30,11 @@
       when: kill_result is changed
 
     # -----------------------------------------------------------------
-    # 2. Start SAP Logon in the interactive session (using runas)
+    # 2. Start SAP Logon using PowerShell Start-Process
     # -----------------------------------------------------------------
-    - name: Start SAP Logon in interactive session
-      ansible.windows.win_command:
-        cmd: "start \"\" \"{{ sap_gui_path }}\""
+    - name: Start SAP Logon in interactive session using PowerShell
+      ansible.windows.win_shell: |
+        Start-Process -FilePath "{{ sap_gui_path }}" -WindowStyle Normal
       become: yes
       become_method: runas
       become_user: "{{ ansible_user }}"
