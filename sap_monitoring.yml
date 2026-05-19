@@ -1,5 +1,5 @@
 ---
-- name: Execute SAP Automation on Remote Windows Server
+- name: Execute SAP Automation on Remote Windows Server (Interactive Session)
   hosts: all              # Matches the host name in your inventory
   gather_facts: no
   vars:
@@ -7,10 +7,16 @@
     python_exe: "C:\\Users\\hemant.patil.adm\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"
 
   tasks:
-    - name: Run clean_downloads.py
-      ansible.windows.win_command:
-        cmd: "{{ python_exe }} {{ scripts_dir }}\\clean_downloads.py"
+    - name: Run clean_downloads.py in interactive session
+      ansible.windows.win_shell: |
+        "{{ python_exe }}" "{{ scripts_dir }}\\clean_downloads.py"
+      args:
         chdir: "{{ scripts_dir }}"
+      become: yes
+      become_method: runas
+      become_user: "{{ ansible_user }}"               # Uses the WinRM user from inventory
+      vars:
+        ansible_become_password: "{{ ansible_password }}"  # Also from inventory
       register: clean_output
       failed_when: false
 
@@ -24,10 +30,16 @@
         msg: "{{ clean_output.stderr_lines }}"
       when: clean_output.stderr_lines | length > 0
 
-    - name: Run main SAP monitoring script
-      ansible.windows.win_command:
-        cmd: "{{ python_exe }} {{ scripts_dir }}\\run_all_env.py"
+    - name: Run main SAP monitoring script in interactive session
+      ansible.windows.win_shell: |
+        "{{ python_exe }}" "{{ scripts_dir }}\\run_all_env.py"
+      args:
         chdir: "{{ scripts_dir }}"
+      become: yes
+      become_method: runas
+      become_user: "{{ ansible_user }}"
+      vars:
+        ansible_become_password: "{{ ansible_password }}"
       register: main_output
       failed_when: false
 
