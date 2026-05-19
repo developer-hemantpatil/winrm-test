@@ -10,7 +10,7 @@
 
   tasks:
     # -----------------------------------------------------------------
-    # 1. Kill any existing SAP Logon processes (ignore if none found)
+    # 1. Stop any existing SAP Logon processes (if any)
     # -----------------------------------------------------------------
     - name: Stop existing SAP Logon processes (if any)
       ansible.windows.win_shell: |
@@ -30,7 +30,7 @@
       when: kill_result is changed
 
     # -----------------------------------------------------------------
-    # 2. Start SAP Logon fresh in the interactive session (using runas)
+    # 2. Start SAP Logon in the interactive session (using runas)
     # -----------------------------------------------------------------
     - name: Start SAP Logon in interactive session
       ansible.windows.win_command:
@@ -94,7 +94,7 @@
         msg: "{{ clean_output.stdout_lines }}"
       when: clean_output.stdout_lines | length > 0
 
-    - name: Show stderr of clean_downloads
+    - name: Show stderr of clean_downloads (if any)
       ansible.builtin.debug:
         msg: "{{ clean_output.stderr_lines }}"
       when: clean_output.stderr_lines | length > 0
