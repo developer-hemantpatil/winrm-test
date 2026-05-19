@@ -6,19 +6,27 @@
     scripts_dir: "C:\\GXO_SAP"
     python_exe: "C:\\Users\\hemant.patil.adm\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"
     sap_gui_path: "C:\\Program Files (x86)\\SAP\\FrontEnd\\SAPGUI\\saplogon.exe"
-    max_wait: 30
+    max_com_wait: 60
 
   tasks:
     # -----------------------------------------------------------------
-    # 1. Ensure SAP GUI is running in the interactive session
+    # 1. Kill any existing SAP Logon processes (to avoid session mismatch)
     # -----------------------------------------------------------------
-    - name: Check if SAP Logon process is running
+    - name: Stop existing SAP Logon processes
       ansible.windows.win_shell: |
-        Get-Process -Name "saplogon" -ErrorAction SilentlyContinue
-      register: sap_process_check
-      changed_when: false
+        Get-Process -Name "saplogon" -ErrorAction SilentlyContinue | Stop-Process -Force
+      register: kill_result
+      changed_when: kill_result.stdout != ""
 
-    - name: Start SAP Logon in interactive session (if not running)
+    - name: Wait a moment after killing
+      ansible.builtin.pause:
+        seconds: 3
+      when: kill_result is changed
+
+    # -----------------------------------------------------------------
+    # 2. Start SAP Logon fresh in the interactive session (using runas)
+    # -----------------------------------------------------------------
+    - name: Start SAP Logon in interactive session
       ansible.windows.win_command:
         cmd: "start \"\" \"{{ sap_gui_path }}\""
       become: yes
@@ -26,18 +34,19 @@
       become_user: "{{ ansible_user }}"
       vars:
         ansible_become_password: "{{ ansible_password }}"
-      when: sap_process_check.stdout == ""
-      register: sap_started
+      register: sap_start
 
     - name: Wait for SAP GUI COM server to become available
       ansible.windows.win_shell: |
-        $max_wait = {{ max_wait }}
+        $max = {{ max_com_wait }}
         $start = Get-Date
-        while ((Get-Date) - $start -lt (New-TimeSpan -Seconds $max_wait)) {
+        while ((Get-Date) - $start -lt (New-TimeSpan -Seconds $max)) {
           try {
-            $null = [System.Runtime.InteropServices.Marshal]::GetActiveObject("SAPGUI")
-            Write-Host "SAP GUI COM object is ready."
-            exit 0
+            $com = [System.Runtime.InteropServices.Marshal]::GetActiveObject("SAPGUI")
+            if ($com) {
+              Write-Host "SAP GUI COM object is ready."
+              exit 0
+            }
           } catch {
             Start-Sleep -Seconds 2
           }
@@ -56,11 +65,11 @@
 
     - name: Fail if COM object never became available
       ansible.builtin.fail:
-        msg: "SAP GUI COM object not available after {{ max_wait }} seconds"
+        msg: "SAP GUI COM object not available after {{ max_com_wait }} seconds. Ensure user is logged into desktop and scripting is enabled."
       when: com_check.rc != 0
 
     # -----------------------------------------------------------------
-    # 2. Run clean_downloads.py
+    # 3. Run clean_downloads.py
     # -----------------------------------------------------------------
     - name: Run clean_downloads.py
       ansible.windows.win_command:
@@ -79,8 +88,13 @@
         msg: "{{ clean_output.stdout_lines }}"
       when: clean_output.stdout_lines | length > 0
 
+    - name: Show stderr of clean_downloads
+      ansible.builtin.debug:
+        msg: "{{ clean_output.stderr_lines }}"
+      when: clean_output.stderr_lines | length > 0
+
     # -----------------------------------------------------------------
-    # 3. Run main SAP monitoring script
+    # 4. Run main SAP monitoring script
     # -----------------------------------------------------------------
     - name: Run main SAP monitoring script
       ansible.windows.win_command:
