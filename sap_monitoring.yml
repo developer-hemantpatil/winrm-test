@@ -1,6 +1,6 @@
 ---
 - name: Execute SAP Automation on Remote Windows Server (Interactive Session)
-  hosts: all              # Matches the host name in your inventory
+  hosts: all
   gather_facts: no
   vars:
     scripts_dir: "C:\\GXO_SAP"
@@ -8,15 +8,14 @@
 
   tasks:
     - name: Run clean_downloads.py in interactive session
-      ansible.windows.win_shell: |
-        "{{ python_exe }}" "{{ scripts_dir }}\\clean_downloads.py"
-      args:
+      ansible.windows.win_command:
+        cmd: "{{ python_exe }} {{ scripts_dir }}\\clean_downloads.py"
         chdir: "{{ scripts_dir }}"
       become: yes
       become_method: runas
-      become_user: "{{ ansible_user }}"               # Uses the WinRM user from inventory
+      become_user: "{{ ansible_user }}"
       vars:
-        ansible_become_password: "{{ ansible_password }}"  # Also from inventory
+        ansible_become_password: "{{ ansible_password }}"
       register: clean_output
       failed_when: false
 
@@ -31,9 +30,8 @@
       when: clean_output.stderr_lines | length > 0
 
     - name: Run main SAP monitoring script in interactive session
-      ansible.windows.win_shell: |
-        "{{ python_exe }}" "{{ scripts_dir }}\\run_all_env.py"
-      args:
+      ansible.windows.win_command:
+        cmd: "{{ python_exe }} {{ scripts_dir }}\\run_all_env.py"
         chdir: "{{ scripts_dir }}"
       become: yes
       become_method: runas
