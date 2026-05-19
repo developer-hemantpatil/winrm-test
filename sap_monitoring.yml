@@ -5,9 +5,29 @@
   vars:
     scripts_dir: "C:\\GXO_SAP"
     python_exe: "C:\\Users\\hemant.patil.adm\\AppData\\Local\\Programs\\Python\\Python311\\python.exe"
+    sap_gui_path: "C:\\Program Files (x86)\\SAP\\FrontEnd\\SAPGUI\\saplogon.exe"
+    sap_startup_wait: 15
 
   tasks:
-    - name: Run clean_downloads.py in interactive session
+    - name: Check if SAP Logon process is running
+      ansible.windows.win_shell: |
+        Get-Process -Name "saplogon" -ErrorAction SilentlyContinue
+      register: sap_process_check
+      changed_when: false
+
+    - name: Start SAP Logon if not running
+      ansible.windows.win_command: |
+        start "" "{{ sap_gui_path }}"
+      when: sap_process_check.stdout == ""
+      register: sap_started
+      changed_when: true
+
+    - name: Wait for SAP GUI to register COM object
+      ansible.builtin.pause:
+        seconds: "{{ sap_startup_wait }}"
+      when: sap_started is changed or sap_process_check.stdout == ""
+
+    - name: Run clean_downloads.py
       ansible.windows.win_command:
         cmd: "{{ python_exe }} {{ scripts_dir }}\\clean_downloads.py"
         chdir: "{{ scripts_dir }}"
@@ -24,12 +44,12 @@
         msg: "{{ clean_output.stdout_lines }}"
       when: clean_output.stdout_lines | length > 0
 
-    - name: Show stderr of clean_downloads (if any)
+    - name: Show stderr of clean_downloads
       ansible.builtin.debug:
         msg: "{{ clean_output.stderr_lines }}"
       when: clean_output.stderr_lines | length > 0
 
-    - name: Run main SAP monitoring script in interactive session
+    - name: Run main SAP monitoring script
       ansible.windows.win_command:
         cmd: "{{ python_exe }} {{ scripts_dir }}\\run_all_env.py"
         chdir: "{{ scripts_dir }}"
@@ -51,7 +71,7 @@
         msg: "{{ main_output.stderr_lines }}"
       when: main_output.stderr_lines | length > 0
 
-    - name: Fail playbook if main script returned a non‑zero exit code
+    - name: Fail playbook if main script returned non‑zero exit code
       ansible.builtin.fail:
         msg: "run_all_env.py exited with code {{ main_output.rc }}"
       when: main_output.rc != 0
