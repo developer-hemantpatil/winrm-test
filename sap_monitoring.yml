@@ -10,15 +10,6 @@
 
   tasks:
     # -----------------------------------------------------------------
-    # 1. Kill any SAP GUI processes to release file locks
-    # -----------------------------------------------------------------
-    - name: Stop all running SAP Logon processes
-      ansible.windows.win_shell: |
-        Get-Process -Name "saplogon" -ErrorAction SilentlyContinue | Stop-Process -Force
-      register: kill_result
-      changed_when: kill_result.stdout != ""
-
-    # -----------------------------------------------------------------
     # 2. Force‑delete the entire downloads folder using Ansible
     #    This works even if files are read‑only or locked by other processes.
     # -----------------------------------------------------------------
