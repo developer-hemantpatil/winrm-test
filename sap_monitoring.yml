@@ -1,19 +1,15 @@
 ---
-- name: Execute SAP Monitoring with Mandatory Cleanup (Ansible Native)
+- name: Run SAP Monitoring with Mandatory Cleanup and Full Logs
   hosts: all
   gather_facts: no
 
   vars:
     python_exe: "C:\\Users\\hemant.patil.adm\\AppData\\Local\\Programs\\Python\\Python311-32\\python.exe"
-    scripts_dir: "C:\\GXO_SAP"
+    script_path: "C:\\GXO_SAP\\run_all_env.py"
     downloads_dir: "C:\\GXO_SAP\\downloads"
 
   tasks:
-    # -----------------------------------------------------------------
-    # 2. Force‑delete the entire downloads folder using Ansible
-    #    This works even if files are read‑only or locked by other processes.
-    # -----------------------------------------------------------------
-    - name: Remove downloads directory (force delete)
+    - name: Remove downloads directory
       ansible.windows.win_file:
         path: "{{ downloads_dir }}"
         state: absent
@@ -33,32 +29,29 @@
       vars:
         ansible_become_password: "{{ ansible_password }}"
 
-    # -----------------------------------------------------------------
-    # 3. Run main SAP monitoring script (32‑bit Python)
-    # -----------------------------------------------------------------
-    - name: Run main SAP monitoring script
+    - name: Execute SAP monitoring script
       ansible.windows.win_command:
-        cmd: '"{{ python_exe }}" "{{ scripts_dir }}\\run_all_env.py"'
-        chdir: "{{ scripts_dir }}"
+        cmd: '"{{ python_exe }}" "{{ script_path }}"'
+        chdir: "C:\\GXO_SAP"
       become: yes
       become_method: runas
       become_user: "{{ ansible_user }}"
       vars:
         ansible_become_password: "{{ ansible_password }}"
-      register: main_result
+      register: result
       failed_when: false
+      timeout: 300
 
-    - name: Show main script stdout
+    - name: Show script stdout (full)
       ansible.builtin.debug:
-        msg: "{{ main_result.stdout_lines }}"
-      when: main_result.stdout_lines | length > 0
+        var: result.stdout_lines
 
-    - name: Show main script stderr
+    - name: Show script stderr (if any)
       ansible.builtin.debug:
-        msg: "{{ main_result.stderr_lines }}"
-      when: main_result.stderr_lines | length > 0
+        var: result.stderr_lines
+      when: result.stderr_lines | length > 0
 
-    - name: Fail if main script returned non‑zero exit code
+    - name: Fail playbook if script returned non‑zero exit code
       ansible.builtin.fail:
-        msg: "run_all_env.py exited with code {{ main_result.rc }}"
-      when: main_result.rc != 0
+        msg: "Script exited with code {{ result.rc }}. Check logs above."
+      when: result.rc != 0
