@@ -1,35 +1,50 @@
 ---
-- name: Execute SAP Monitoring on Windows Server
+- name: Execute SAP Monitoring with Mandatory Cleanup (Ansible Native)
   hosts: all
   gather_facts: no
 
   vars:
     python_exe: "C:\\Users\\hemant.patil.adm\\AppData\\Local\\Programs\\Python\\Python311-32\\python.exe"
     scripts_dir: "C:\\GXO_SAP"
+    downloads_dir: "C:\\GXO_SAP\\downloads"
 
   tasks:
-    - name: Run clean_downloads.py
-      ansible.windows.win_command:
-        cmd: '"{{ python_exe }}" "{{ scripts_dir }}\\clean_downloads.py"'
-        chdir: "{{ scripts_dir }}"
+    # -----------------------------------------------------------------
+    # 1. Kill any SAP GUI processes to release file locks
+    # -----------------------------------------------------------------
+    - name: Stop all running SAP Logon processes
+      ansible.windows.win_shell: |
+        Get-Process -Name "saplogon" -ErrorAction SilentlyContinue | Stop-Process -Force
+      register: kill_result
+      changed_when: kill_result.stdout != ""
+
+    # -----------------------------------------------------------------
+    # 2. Force‑delete the entire downloads folder using Ansible
+    #    This works even if files are read‑only or locked by other processes.
+    # -----------------------------------------------------------------
+    - name: Remove downloads directory (force delete)
+      ansible.windows.win_file:
+        path: "{{ downloads_dir }}"
+        state: absent
       become: yes
       become_method: runas
       become_user: "{{ ansible_user }}"
       vars:
         ansible_become_password: "{{ ansible_password }}"
-      register: clean_result
-      failed_when: false
 
-    - name: Show clean_downloads output
-      ansible.builtin.debug:
-        msg: "{{ clean_result.stdout_lines }}"
-      when: clean_result.stdout_lines | length > 0
+    - name: Recreate empty downloads directory
+      ansible.windows.win_file:
+        path: "{{ downloads_dir }}"
+        state: directory
+      become: yes
+      become_method: runas
+      become_user: "{{ ansible_user }}"
+      vars:
+        ansible_become_password: "{{ ansible_password }}"
 
-    - name: Show clean_downloads errors (if any)
-      ansible.builtin.debug:
-        msg: "{{ clean_result.stderr_lines }}"
-      when: clean_result.stderr_lines | length > 0
-
+    # -----------------------------------------------------------------
+    # 3. Run main SAP monitoring script (32‑bit Python)
+    # -----------------------------------------------------------------
     - name: Run main SAP monitoring script
       ansible.windows.win_command:
         cmd: '"{{ python_exe }}" "{{ scripts_dir }}\\run_all_env.py"'
