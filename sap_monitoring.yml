@@ -1,121 +1,58 @@
 ---
-- name: GXO SAP Basis Monitoring
+- name: Execute SAP Monitoring on Windows Server
   hosts: all
   gather_facts: no
 
   vars:
-    task_name: "GXO_SAP_Monitoring"
-    task_timeout: 1800   # 30 minutes max wait
+    python_exe: "C:\\Users\\hemant.patil.adm\\AppData\\Local\\Programs\\Python\\Python311-32\\python.exe"
+    scripts_dir: "C:\\GXO_SAP"
 
   tasks:
+    - name: Run clean_downloads.py
+      ansible.windows.win_command:
+        cmd: '"{{ python_exe }}" "{{ scripts_dir }}\\clean_downloads.py"'
+        chdir: "{{ scripts_dir }}"
+      become: yes
+      become_method: runas
+      become_user: "{{ ansible_user }}"
+      vars:
+        ansible_become_password: "{{ ansible_password }}"
+      register: clean_result
+      failed_when: false
 
-    # ---------------------------------------------------------------
-    # 1. Verify SAP GUI is running in the user's session
-    # ---------------------------------------------------------------
-    - name: Check SAP Logon is running
-      ansible.windows.win_shell: |
-        $proc = Get-Process -Name "saplogon" -ErrorAction SilentlyContinue
-        if ($proc) {
-            Write-Host "SAP Logon is running. OK."
-            exit 0
-        } else {
-            Write-Host "SAP Logon is NOT running. Start it first."
-            exit 1
-        }
-      register: sap_check
-
-    - name: Show SAP check result
+    - name: Show clean_downloads output
       ansible.builtin.debug:
-        msg: "{{ sap_check.stdout_lines }}"
+        msg: "{{ clean_result.stdout_lines }}"
+      when: clean_result.stdout_lines | length > 0
 
-    - name: Abort if SAP Logon is not running
+    - name: Show clean_downloads errors (if any)
+      ansible.builtin.debug:
+        msg: "{{ clean_result.stderr_lines }}"
+      when: clean_result.stderr_lines | length > 0
+
+    - name: Run main SAP monitoring script
+      ansible.windows.win_command:
+        cmd: '"{{ python_exe }}" "{{ scripts_dir }}\\run_all_env.py"'
+        chdir: "{{ scripts_dir }}"
+      become: yes
+      become_method: runas
+      become_user: "{{ ansible_user }}"
+      vars:
+        ansible_become_password: "{{ ansible_password }}"
+      register: main_result
+      failed_when: false
+
+    - name: Show main script stdout
+      ansible.builtin.debug:
+        msg: "{{ main_result.stdout_lines }}"
+      when: main_result.stdout_lines | length > 0
+
+    - name: Show main script stderr
+      ansible.builtin.debug:
+        msg: "{{ main_result.stderr_lines }}"
+      when: main_result.stderr_lines | length > 0
+
+    - name: Fail if main script returned non‑zero exit code
       ansible.builtin.fail:
-        msg: >
-          SAP Logon is not open on the server.
-          hemant.patil.adm must be logged in with SAP GUI open.
-      when: sap_check.rc != 0
-
-    # ---------------------------------------------------------------
-    # 2. Clean downloads folder before run
-    # ---------------------------------------------------------------
-    - name: Run cleanup (clean downloads)
-      ansible.windows.win_shell: |
-        & "C:\Users\hemant.patil.adm\AppData\Local\Programs\Python\Python311\python.exe" `
-          "C:\GXO_SAP\cleanup.py" --downloads
-      register: cleanup_result
-      failed_when: false
-
-    - name: Show cleanup output
-      ansible.builtin.debug:
-        msg: "{{ cleanup_result.stdout_lines }}"
-      when: cleanup_result.stdout_lines | length > 0
-
-    # ---------------------------------------------------------------
-    # 3. Trigger the scheduled task (runs in Session 1 – user desktop)
-    # ---------------------------------------------------------------
-    - name: Run SAP monitoring via Task Scheduler
-      ansible.windows.win_shell: |
-        schtasks /Run /TN "{{ task_name }}"
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "Failed to start task."
-            exit 1
-        }
-        Write-Host "Task triggered successfully."
-      register: task_trigger
-
-    - name: Show task trigger result
-      ansible.builtin.debug:
-        msg: "{{ task_trigger.stdout_lines }}"
-
-    # ---------------------------------------------------------------
-    # 4. Wait for the task to complete
-    # ---------------------------------------------------------------
-    - name: Wait for scheduled task to finish
-      ansible.windows.win_shell: |
-        $timeout = {{ task_timeout }}
-        $start   = Get-Date
-        $task    = "{{ task_name }}"
-
-        while ($true) {
-            $state = (Get-ScheduledTask -TaskName $task).State
-            Write-Host "Task state: $state"
-
-            if ($state -eq "Ready") {
-                $lastResult = (Get-ScheduledTaskInfo -TaskName $task).LastTaskResult
-                Write-Host "Task completed. Last result code: $lastResult"
-                if ($lastResult -eq 0) { exit 0 } else { exit $lastResult }
-            }
-
-            if (((Get-Date) - $start).TotalSeconds -gt $timeout) {
-                Write-Host "Timed out waiting for task to complete."
-                exit 1
-            }
-            Start-Sleep -Seconds 15
-        }
-      register: task_wait
-      failed_when: task_wait.rc != 0
-
-    - name: Show task completion status
-      ansible.builtin.debug:
-        msg: "{{ task_wait.stdout_lines }}"
-
-    # ---------------------------------------------------------------
-    # 5. Read and display the latest log file
-    # ---------------------------------------------------------------
-    - name: Get latest log file
-      ansible.windows.win_shell: |
-        $log = Get-ChildItem "C:\GXO_SAP\logs\*.log" |
-               Sort-Object LastWriteTime -Descending |
-               Select-Object -First 1
-        if ($log) {
-            Get-Content $log.FullName | Select-Object -Last 50
-        } else {
-            Write-Host "No log file found."
-        }
-      register: log_output
-      failed_when: false
-
-    - name: Show last 50 lines of log
-      ansible.builtin.debug:
-        msg: "{{ log_output.stdout_lines }}"
-      when: log_output.stdout_lines | length > 0
+        msg: "run_all_env.py exited with code {{ main_result.rc }}"
+      when: main_result.rc != 0
