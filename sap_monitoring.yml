@@ -50,22 +50,6 @@
         var: result.stderr_lines
       when: result.stderr_lines | length > 0
 
-    - name: Find the latest log file
-      ansible.windows.win_shell: |
-        Get-ChildItem "C:\\GXO_SAP\\logs\\*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Select-Object -ExpandProperty FullName
-      register: latest_log
-
-    - name: Display full log file content
-      ansible.builtin.slurp:
-        src: "{{ latest_log.stdout }}"
-      register: log_content
-      when: latest_log.stdout != ""
-
-    - name: Show log file
-      ansible.builtin.debug:
-        msg: "{{ log_content.content | b64decode }}"
-      when: latest_log.stdout != ""
-
     - name: Fail only if script had an unexpected error (exit code not 0 or 1)
       ansible.builtin.fail:
         msg: "Script exited with code {{ result.rc }}. Check logs above."
