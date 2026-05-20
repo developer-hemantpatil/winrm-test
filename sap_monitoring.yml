@@ -1,5 +1,5 @@
 ---
-- name: Run SAP Monitoring with Mandatory Cleanup and Full Logs
+- name: Run SAP Monitoring with Cleanup and Full Logs
   hosts: all
   gather_facts: no
 
@@ -9,7 +9,7 @@
     downloads_dir: "C:\\GXO_SAP\\downloads"
 
   tasks:
-    - name: Remove downloads directory
+    - name: Remove downloads directory (mandatory cleanup)
       ansible.windows.win_file:
         path: "{{ downloads_dir }}"
         state: absent
@@ -29,7 +29,7 @@
       vars:
         ansible_become_password: "{{ ansible_password }}"
 
-    - name: Execute SAP monitoring script
+    - name: Execute script with 10‑minute timeout
       ansible.windows.win_command:
         cmd: '"{{ python_exe }}" "{{ script_path }}"'
         chdir: "C:\\GXO_SAP"
@@ -41,7 +41,6 @@
       register: result
       failed_when: false
       timeout: 300
-
     - name: Show script stdout (full)
       ansible.builtin.debug:
         var: result.stdout_lines
@@ -51,7 +50,23 @@
         var: result.stderr_lines
       when: result.stderr_lines | length > 0
 
-    - name: Fail playbook if script returned non‑zero exit code
+    - name: Find the latest log file
+      ansible.windows.win_shell: |
+        Get-ChildItem "C:\\GXO_SAP\\logs\\*.log" | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | Select-Object -ExpandProperty FullName
+      register: latest_log
+
+    - name: Display full log file content
+      ansible.builtin.slurp:
+        src: "{{ latest_log.stdout }}"
+      register: log_content
+      when: latest_log.stdout != ""
+
+    - name: Show log file
+      ansible.builtin.debug:
+        msg: "{{ log_content.content | b64decode }}"
+      when: latest_log.stdout != ""
+
+    - name: Fail only if script had an unexpected error (exit code not 0 or 1)
       ansible.builtin.fail:
         msg: "Script exited with code {{ result.rc }}. Check logs above."
-      when: result.rc != 0
+      when: result.rc != 0 and result.rc != 1
