@@ -29,7 +29,7 @@
       vars:
         ansible_become_password: "{{ ansible_password }}"
 
-    - name: Execute script with 10‑minute timeout
+    - name: Execute script with 15‑minute timeout
       ansible.windows.win_command:
         cmd: '"{{ python_exe }}" "{{ script_path }}"'
         chdir: "C:\\GXO_SAP"
@@ -40,7 +40,7 @@
         ansible_become_password: "{{ ansible_password }}"
       register: result
       failed_when: false
-      timeout: 300
+      timeout: 900
     - name: Show script stdout (full)
       ansible.builtin.debug:
         var: result.stdout_lines
