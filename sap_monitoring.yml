@@ -40,7 +40,7 @@
         ansible_become_password: "{{ ansible_password }}"
       register: result
       failed_when: false
-      timeout: 900
+      timeout: 1200
     - name: Show script stdout (full)
       ansible.builtin.debug:
         var: result.stdout_lines
